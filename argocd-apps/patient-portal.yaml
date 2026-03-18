@@ -1,0 +1,76 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: patient-portal
+  namespace: argocd
+  # Add labels for organization
+  labels:
+    app: patient-portal
+    environment: production
+    team: healthcare
+  # Add annotations for documentation
+  annotations:
+    argocd.argoproj.io/manifest-generate-paths: .
+    notifications.argoproj.io/subscribe.on-sync-succeeded.slack: healthcare-deployments
+spec:
+  # Project for RBAC and resource isolation
+  project: default
+  
+  # Source configuration
+  source:
+    repoURL: https://github.com/Anaximandr0s/medicare-gitops.git
+    targetRevision: HEAD  # or use a specific branch like 'main' or tag like 'v1.0.0'
+    path: apps/patient-portal
+  
+  # Destination cluster and namespace
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: medicare
+  
+  # Sync policy - automated with safeguards
+  syncPolicy:
+    # Automated sync configuration
+    automated:
+      # Automatically sync when Git changes are detected
+      prune: true          # Delete resources that are no longer in Git
+      selfHeal: true       # Automatically correct drift from Git state
+      allowEmpty: false    # Don't sync if the source is empty (safety check)
+    
+    # Sync options
+    syncOptions:
+      - CreateNamespace=true           # Auto-create namespace if it doesn't exist
+      - PrunePropagationPolicy=foreground  # Delete resources in correct order
+      - PruneLast=true                 # Prune resources after new resources are healthy
+      - RespectIgnoreDifferences=true  # Respect ignore differences settings
+      - ApplyOutOfSyncOnly=true        # Only sync resources that are out of sync
+    
+    # Retry configuration for failed syncs
+    retry:
+      limit: 5              # Retry up to 5 times
+      backoff:
+        duration: 5s        # Initial retry delay
+        factor: 2           # Multiply delay by this factor each retry
+        maxDuration: 3m     # Maximum delay between retries
+  
+  # Ignore differences for specific fields (useful for auto-generated fields)
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas  # Ignore if HPA is managing replicas
+    - group: ""
+      kind: Secret
+      jsonPointers:
+        - /data  # Ignore secret data changes if managed externally
+  
+  # Health assessment configuration
+  info:
+    - name: expected-startup-time
+      value: "30 seconds"
+    - name: health-check-endpoint
+      value: "GET / on port 80"
+    - name: readiness-probe
+      value: "httpGet:/ every 5s"
+
+  # Resource tracking method
+  revisionHistoryLimit: 10  # Keep last 10 revisions for rollback

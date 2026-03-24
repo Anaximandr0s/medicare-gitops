@@ -6,7 +6,7 @@ metadata:
     app: patient-portal
     version: v1.0.0
 spec:
-  replicas: 3
+  replicas: 53
   selector:
     matchLabels:
       app: patient-portal
